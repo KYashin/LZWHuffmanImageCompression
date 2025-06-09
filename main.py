@@ -184,7 +184,7 @@ class CompressionApp(QMainWindow):
                 compressed = LZW_color.lzw_compress(bit_string)
                 packed = LZW_color.pack_12bit_codes(compressed)
 
-                out_path = os.path.join(self.self.output_dir_color, f"ch{ch_idx}_plane{i}.lzw")
+                out_path = os.path.join(self.output_dir_color, f"ch{ch_idx}_plane{i}.lzw")
                 with open(out_path, 'wb') as f:
                     f.write(struct.pack('II', *plane.shape))  # height, width
                     f.write(struct.pack('I', len(compressed)))  # кол-во 12-битных кодов

@@ -77,6 +77,8 @@ def lzw_compress(data):
     if w:
         compressed.append(dictionary[w])
 
+    # Вернём копию словаря, где ключами будут коды, а значениями — строки
+    # inverse_dict = {v: k for k, v in dictionary.items()}
     return compressed
 
 def lzw_decompress(compressed):
@@ -108,74 +110,81 @@ def bit_string_to_image(bit_string, shape):
 
 # === ОСНОВНОЙ КОД ===
 
-input_path = 'Images/green_64x64.tif'
-output_dir = 'compressed_color_planes/without_Huffman'
-restored_dir = 'RestoredImages/without_Huffman'
-os.makedirs(output_dir, exist_ok=True)
-os.makedirs(restored_dir, exist_ok=True)
-
-img = cv2.imread(input_path, cv2.IMREAD_COLOR)
-channels = cv2.split(img)
-
-restored_channels = []
-
-for ch_idx, channel in enumerate(channels):
-    bit_planes = []
-    bit_plane_strings = []
-
-    for i in range(8):
-        plane = ((channel >> i) & 1).astype(np.uint8)
-        bit_planes.append(plane)
-        flat = plane.flatten()
-        bit_string = ''.join(str(b) for b in flat)
-        bit_plane_strings.append(bit_string)
-
-    restored_bit_planes = []
-
-    for i in range(8):
-        shape = bit_planes[i].shape
-        bit_string = bit_plane_strings[i]
-
-        compressed = lzw_compress(bit_string)
-        packed = pack_12bit_codes(compressed)
-
-        out_path = os.path.join(output_dir, f"ch{ch_idx}_plane{i}.lzw")
-        with open(out_path, 'wb') as f:
-            f.write(struct.pack('II', *shape))
-            f.write(struct.pack('I', len(compressed)))
-            f.write(struct.pack('I', len(packed)))
-            f.write(struct.pack('I', len(bit_string)))
-            f.write(packed)
-
-        # Восстановление сразу для проверки
-        unpacked = unpack_12bit_codes(packed, len(compressed))
-        decompressed = lzw_decompress(unpacked)[:len(bit_string)]
-        restored = bit_string_to_image(decompressed, shape)
-        restored_bit_planes.append(restored)
-
-    restored_channel = np.zeros_like(restored_bit_planes[0], dtype=np.uint8)
-    for i in range(8):
-        restored_channel += (restored_bit_planes[i] << i)
-    restored_channels.append(restored_channel)
-
-# === СОБИРАЕМ ЦВЕТНОЕ ИЗОБРАЖЕНИЕ ===
-restored_color = cv2.merge(restored_channels)
-cv2.imwrite(os.path.join(restored_dir, "reconstructed_color.tif"), restored_color)
-
-if np.array_equal(img, restored_color):
-    print("Восстановленное цветное изображение совпадает с исходным.")
-else:
-    print("Восстановленное цветное изображение отличается от исходного.")
-
-original_size = img.nbytes
-compressed_size = sum(
-    os.path.getsize(os.path.join(output_dir, f))
-    for f in os.listdir(output_dir)
-    if f.endswith('.lzw')
-)
-
-print(f"Размер оригинала: {original_size} байт")
-print(f"Размер сжатых плоскостей: {compressed_size} байт")
-
-ratio = original_size / compressed_size
-print(f"Коэффициент сжатия: {ratio:.2f}")
+# input_path = 'Images/small.tif'
+# output_dir = 'compressed_color_planes/without_Huffman'
+# restored_dir = 'RestoredImages/without_Huffman'
+# os.makedirs(output_dir, exist_ok=True)
+# os.makedirs(restored_dir, exist_ok=True)
+#
+# # === СЖАТИЕ ===
+# img = cv2.imread(input_path, cv2.IMREAD_COLOR)
+# channels = cv2.split(img)
+#
+# # Сохраняем bit-planes в .lzw файлы
+# for ch_idx, channel in enumerate(channels):
+#     for i in range(8):
+#         plane = ((channel >> i) & 1).astype(np.uint8)
+#         bit_string = ''.join(str(b) for b in plane.flatten())
+#
+#         compressed = lzw_compress(bit_string)
+#         packed = pack_12bit_codes(compressed)
+#
+#         out_path = os.path.join(output_dir, f"ch{ch_idx}_plane{i}.lzw")
+#         with open(out_path, 'wb') as f:
+#             f.write(struct.pack('II', *plane.shape))  # height, width
+#             f.write(struct.pack('I', len(compressed)))  # кол-во 12-битных кодов
+#             f.write(struct.pack('I', len(packed)))     # длина packed байт
+#             f.write(struct.pack('I', len(bit_string))) # длина строки бит
+#             f.write(packed)
+#
+# restored_channels = []
+#
+# for ch_idx in range(3):  # RGB
+#     restored_bit_planes = []
+#
+#     for i in range(8):
+#         in_path = os.path.join(output_dir, f"ch{ch_idx}_plane{i}.lzw")
+#         with open(in_path, 'rb') as f:
+#             height, width = struct.unpack('II', f.read(8))
+#             shape = (height, width)
+#
+#             num_codes = struct.unpack('I', f.read(4))[0]
+#             packed_len = struct.unpack('I', f.read(4))[0]
+#             bit_string_len = struct.unpack('I', f.read(4))[0]
+#
+#             packed = f.read(packed_len)
+#
+#         unpacked = unpack_12bit_codes(packed, num_codes)
+#         decompressed = lzw_decompress(unpacked)[:bit_string_len]
+#         restored = bit_string_to_image(decompressed, shape)
+#         restored_bit_planes.append(restored)
+#
+#     # Собираем канал
+#     restored_channel = np.zeros_like(restored_bit_planes[0], dtype=np.uint8)
+#     for i in range(8):
+#         restored_channel += (restored_bit_planes[i] << i)
+#
+#     restored_channels.append(restored_channel)
+#
+# # === СОБИРАЕМ ЦВЕТНОЕ ИЗОБРАЖЕНИЕ ===
+# restored_color = cv2.merge(restored_channels)
+# cv2.imwrite(os.path.join(restored_dir, "reconstructed_color.tif"), restored_color)
+#
+# # === ПРОВЕРКА ===
+# if np.array_equal(img, restored_color):
+#     print("Восстановленное цветное изображение совпадает с исходным.")
+# else:
+#     print("Восстановленное цветное изображение отличается от исходного.")
+#
+# original_size = img.nbytes
+# compressed_size = sum(
+#     os.path.getsize(os.path.join(output_dir, f))
+#     for f in os.listdir(output_dir)
+#     if f.endswith('.lzw')
+# )
+#
+# print(f"Размер оригинала: {original_size} байт")
+# print(f"Размер сжатых плоскостей: {compressed_size} байт")
+#
+# ratio = original_size / compressed_size
+# print(f"Коэффициент сжатия: {ratio:.2f}")

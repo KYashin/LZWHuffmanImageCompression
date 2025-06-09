@@ -211,171 +211,118 @@ def lzw_decompress(compressed):
 def bit_string_to_image(bit_string, shape):
     flat = np.array([int(b) for b in bit_string[:shape[0]*shape[1]]], dtype=np.uint8)
     return flat.reshape(shape)
-
-# --- ОСНОВНОЙ КОД ---
-
-input_path = 'Images/green_1000x1000.tif'  # путь к цветному изображению
-output_dir = 'compressed_color_planes/with_Huffman'
-restored_dir = 'RestoredImages/with_Huffman'
-
-os.makedirs(output_dir, exist_ok=True)
-os.makedirs(restored_dir, exist_ok=True)
-
-img = cv2.imread(input_path, cv2.IMREAD_COLOR)
-channels = cv2.split(img)
-restored_channels = []
-
-total_original_bits = 0
-total_compressed_bits = 0
-
-for ch_idx, channel in enumerate(channels):
-    bit_planes = []
-    bit_plane_strings = []
-    for i in range(8):
-        plane = ((channel >> i) & 1).astype(np.uint8)
-        bit_planes.append(plane)
-        flat = plane.flatten()
-        bit_string = ''.join(str(b) for b in flat)
-        bit_plane_strings.append(bit_string)
-
-    restored_bit_planes = []
-    channel_original_bits = 0
-    channel_compressed_bits = 0
-    print(f"Канал {ch_idx}:")
-
-    # for i in range(8):
-    #     shape = bit_planes[i].shape
-    #     bit_string = bit_plane_strings[i]
-    #     original_bits = len(bit_string)
-    #
-    #     # Сжимаем LZW
-    #     compressed = lzw_compress(bit_string)
-    #
-    #     # Кодируем адаптивным Хаффманом
-    #     coder = AdaptiveHuffmanCoder()
-    #     encoded_bits = coder.encode(compressed)
-    #     compressed_bits = len(encoded_bits)
-    #
-    #     # Упаковываем в байты (для записи в файл)
-    #     encoded_bytes = bits_to_bytes(encoded_bits)
-    #     compressed_bytes_len = len(encoded_bytes)
-    #
-    #     print(f"  Битовая плоскость {i}:")
-    #     print(f"    Исходный размер: {original_bits} бит")
-    #     print(f"    Сжатый размер (Адапт.Хаффман): {compressed_bits} бит, {compressed_bytes_len} байт")
-    #     print(f"    Коэффициент сжатия: {original_bits / (compressed_bytes_len * 8):.3f}")
-    #
-    #     channel_original_bits += original_bits
-    #     channel_compressed_bits += compressed_bits
-    #
-    #     # Запись и чтение файла, восстановление...
-    #     out_path = os.path.join(output_dir, f"ch{ch_idx}_plane{i}.bin")
-    #     with open(out_path, 'wb') as f:
-    #         f.write(struct.pack('I', len(encoded_bits)))
-    #         f.write(encoded_bytes)
-    #
-    #     with open(out_path, 'rb') as f:
-    #         bit_len, = struct.unpack('I', f.read(4))
-    #         encoded_data = f.read()
-    #     encoded_bits_read = bytes_to_bits(encoded_data, bit_len)
-    #
-    #     # Новый объект адаптивного декодера
-    #     decoder = AdaptiveHuffmanCoder()
-    #     decoded = decoder.decode(encoded_bits_read)
-    #
-    #     # 👇 ВСТАВКА
-    #     print(f"    🔎 Кол-во LZW-кодов до Хаффмана: {len(compressed)}")
-    #     print(f"    🔎 Кол-во LZW-кодов после Хаффмана: {len(decoded)}")
-    #     if len(decoded) != len(compressed):
-    #         print("    ❗ Предупреждение: количество кодов не совпадает!")
-    #
-    #     if len(decoded) != shape[0] * shape[1]:
-    #         print(f"⚠️ Предупреждение: длина декомпрессии {len(decoded)} != {shape[0] * shape[1]}")
-    #
-    #     decompressed = lzw_decompress(decoded)
-    #     restored_plane = bit_string_to_image(decompressed, shape)
-    #     restored_bit_planes.append(restored_plane)
-
-    for i in range(8):
-        shape = bit_planes[i].shape
-        bit_string = bit_plane_strings[i]
-        original_bits = len(bit_string)
-
-        flat = bit_planes[i].flatten()
-        if np.all(flat == 0):
-            print(f"  Битовая плоскость {i} полностью нулевая — пропущена.")
-            compressed_bits = 0
-            channel_compressed_bits += compressed_bits
-
-            # Создаем нулевую плоскость и добавляем
-            restored_plane = np.zeros(shape, dtype=np.uint8)
-            restored_bit_planes.append(restored_plane)
-            continue
-
-        # Сжимаем LZW
-        compressed = lzw_compress(bit_string)
-
-        # Кодируем адаптивным Хаффманом
-        coder = AdaptiveHuffmanCoder()
-        encoded_bits = coder.encode(compressed)
-        compressed_bits = len(encoded_bits)
-
-        encoded_bytes = bits_to_bytes(encoded_bits)
-        compressed_bytes_len = len(encoded_bytes)
-
-        print(f"  Битовая плоскость {i}:")
-        print(f"    Исходный размер: {original_bits} бит")
-        print(f"    Сжатый размер (Адапт.Хаффман): {compressed_bits} бит, {compressed_bytes_len} байт")
-        print(f"    Коэффициент сжатия: {original_bits / (compressed_bytes_len * 8):.3f}")
-
-        channel_original_bits += original_bits
-        channel_compressed_bits += compressed_bits
-
-        out_path = os.path.join(output_dir, f"ch{ch_idx}_plane{i}.bin")
-        with open(out_path, 'wb') as f:
-            f.write(struct.pack('I', len(encoded_bits)))
-            f.write(encoded_bytes)
-
-        with open(out_path, 'rb') as f:
-            bit_len, = struct.unpack('I', f.read(4))
-            encoded_data = f.read()
-        encoded_bits_read = bytes_to_bits(encoded_data, bit_len)
-
-        decoder = AdaptiveHuffmanCoder()
-        decoded = decoder.decode(encoded_bits_read)
-
-        if len(decoded) != len(compressed):
-            print("    ❗ Предупреждение: количество кодов не совпадает!")
-
-        decompressed = lzw_decompress(decoded)
-        restored_plane = bit_string_to_image(decompressed, shape)
-        restored_bit_planes.append(restored_plane)
-
-    channel_ratio = channel_original_bits / (channel_compressed_bits if channel_compressed_bits else 1)
-    print(f"Канал {ch_idx} общий коэффициент сжатия: {channel_ratio:.3f}\n")
-
-    total_original_bits += channel_original_bits
-    total_compressed_bits += channel_compressed_bits
-
-    # Восстанавливаем канал из битовых плоскостей
-    restored_channel = sum((restored_bit_planes[i] << i).astype(np.uint8) for i in range(8))
-    restored_channels.append(restored_channel)
-
-restored_img = cv2.merge(restored_channels)
-cv2.imwrite(os.path.join(restored_dir, 'restored_image.tif'), restored_img)
-
-original_size = img.nbytes
-compressed_size = sum(
-    os.path.getsize(os.path.join(output_dir, f))
-    for f in os.listdir(output_dir)
-    if f.endswith('.bin')
-)
-
-if np.array_equal(restored_img, img):
-    print("Исходное и восстановленное изображения полностью совпадают после декодирования!", end="\n\n")
-
-print(f"Размер оригинала: {original_size} байт")
-print(f"Размер сжатых плоскостей: {compressed_size} байт")
-
-ratio = original_size / compressed_size
-print(f"Коэффициент сжатия: {ratio:.2f}")
+#
+# # --- ОСНОВНОЙ КОД ---
+#
+# input_path = 'Images/circuit_bw.tif'  # путь к цветному изображению
+# output_dir = 'compressed_color_planes/with_Huffman'
+# restored_dir = 'RestoredImages/with_Huffman'
+#
+# os.makedirs(output_dir, exist_ok=True)
+# os.makedirs(restored_dir, exist_ok=True)
+#
+# img = cv2.imread(input_path, cv2.IMREAD_COLOR)
+# channels = cv2.split(img)
+# restored_channels = []
+#
+# total_original_bits = 0
+# total_compressed_bits = 0
+#
+# for ch_idx, channel in enumerate(channels):
+#     bit_planes = []
+#     bit_plane_strings = []
+#     for i in range(8):
+#         plane = ((channel >> i) & 1).astype(np.uint8)
+#         bit_planes.append(plane)
+#         flat = plane.flatten()
+#         bit_string = ''.join(str(b) for b in flat)
+#         bit_plane_strings.append(bit_string)
+#
+#     restored_bit_planes = []
+#     channel_original_bits = 0
+#     channel_compressed_bits = 0
+#     print(f"Канал {ch_idx}:")
+#
+#     for i in range(8):
+#         shape = bit_planes[i].shape
+#         bit_string = bit_plane_strings[i]
+#         original_bits = len(bit_string)
+#
+#         flat = bit_planes[i].flatten()
+#         if np.all(flat == 0):
+#             print(f"  Битовая плоскость {i} полностью нулевая — пропущена.")
+#             compressed_bits = 0
+#             channel_compressed_bits += compressed_bits
+#
+#             # Создаем нулевую плоскость и добавляем
+#             restored_plane = np.zeros(shape, dtype=np.uint8)
+#             restored_bit_planes.append(restored_plane)
+#             continue
+#
+#         # Сжимаем LZW
+#         compressed = lzw_compress(bit_string)
+#
+#         # Кодируем адаптивным Хаффманом
+#         coder = AdaptiveHuffmanCoder()
+#         encoded_bits = coder.encode(compressed)
+#         compressed_bits = len(encoded_bits)
+#
+#         encoded_bytes = bits_to_bytes(encoded_bits)
+#         compressed_bytes_len = len(encoded_bytes)
+#
+#         print(f"  Битовая плоскость {i}:")
+#         print(f"    Исходный размер: {original_bits} бит")
+#         print(f"    Сжатый размер (Адапт.Хаффман): {compressed_bits} бит, {compressed_bytes_len} байт")
+#         print(f"    Коэффициент сжатия: {original_bits / (compressed_bytes_len * 8):.3f}")
+#
+#         channel_original_bits += original_bits
+#         channel_compressed_bits += compressed_bits
+#
+#         out_path = os.path.join(output_dir, f"ch{ch_idx}_plane{i}.bin")
+#         with open(out_path, 'wb') as f:
+#             f.write(struct.pack('I', len(encoded_bits)))
+#             f.write(encoded_bytes)
+#
+#         with open(out_path, 'rb') as f:
+#             bit_len, = struct.unpack('I', f.read(4))
+#             encoded_data = f.read()
+#         encoded_bits_read = bytes_to_bits(encoded_data, bit_len)
+#
+#         decoder = AdaptiveHuffmanCoder()
+#         decoded = decoder.decode(encoded_bits_read)
+#
+#         if len(decoded) != len(compressed):
+#             print("    ❗ Предупреждение: количество кодов не совпадает!")
+#
+#         decompressed = lzw_decompress(decoded)
+#         restored_plane = bit_string_to_image(decompressed, shape)
+#         restored_bit_planes.append(restored_plane)
+#
+#     channel_ratio = channel_original_bits / (channel_compressed_bits if channel_compressed_bits else 1)
+#     print(f"Канал {ch_idx} общий коэффициент сжатия: {channel_ratio:.3f}\n")
+#
+#     total_original_bits += channel_original_bits
+#     total_compressed_bits += channel_compressed_bits
+#
+#     # Восстанавливаем канал из битовых плоскостей
+#     restored_channel = sum((restored_bit_planes[i] << i).astype(np.uint8) for i in range(8))
+#     restored_channels.append(restored_channel)
+#
+# restored_img = cv2.merge(restored_channels)
+# cv2.imwrite(os.path.join(restored_dir, 'restored_image.tif'), restored_img)
+#
+# original_size = img.nbytes
+# compressed_size = sum(
+#     os.path.getsize(os.path.join(output_dir, f))
+#     for f in os.listdir(output_dir)
+#     if f.endswith('.bin')
+# )
+#
+# if np.array_equal(restored_img, img):
+#     print("Исходное и восстановленное изображения полностью совпадают после декодирования!", end="\n\n")
+#
+# print(f"Размер оригинала: {original_size} байт")
+# print(f"Размер сжатых плоскостей: {compressed_size} байт")
+#
+# ratio = original_size / compressed_size
+# print(f"Коэффициент сжатия: {ratio:.2f}")

@@ -65,15 +65,13 @@ class CompressionApp(QMainWindow):
         self.setCentralWidget(central_widget)
         self.file_path = None
         self.image = None
-        self.output_dir_without_Huffman_color = 'compressed_color_planes/without_Huffman'
-        self.restored_dir_without_Huffman_color = 'RestoredImages/without_Huffman'
-        self.output_dir_without_Huffman_gray = 'compressed_gray_planes/without_Huffman'
-        self.restored_dir_without_Huffman_gray = 'RestoredGrayImages/without_Huffman'
-        self.output_dir_with_Huffman_color = 'compressed_color_planes/with_Huffman'
-        self.restored_dir_with_Huffman_color = 'RestoredImages/with_Huffman'
+        self.output_dir_color = 'compressed_color_planes'
+        self.restored_dir_color = 'RestoredImages'
+        self.output_dir_gray = 'compressed_gray_planes'
+        self.restored_dir_gray = 'RestoredGrayImages'
 
         # ЗАГОЛОВОК
-        title = QLabel("LZW Image Compressor with Adaptive Huffman")
+        title = QLabel("LZW Image Compressor")
         title.setObjectName("titleLabel")
         title.setAlignment(Qt.AlignmentFlag.AlignCenter)
 
@@ -89,12 +87,10 @@ class CompressionApp(QMainWindow):
 
         # Настройки
         self.color_check = QCheckBox('Color image')
-        self.huffman_check = QCheckBox('Adaptive Huffman')
 
         options_box = QGroupBox('Settings')
         options_layout = QVBoxLayout()
         options_layout.addWidget(self.color_check)
-        options_layout.addWidget(self.huffman_check)
         options_box.setLayout(options_layout)
 
         # Лог
@@ -129,7 +125,6 @@ class CompressionApp(QMainWindow):
         central_widget.setLayout(main_layout)
 
         self.color_check.setDisabled(True)
-        self.huffman_check.setDisabled(True)
         self.compress_btn.setDisabled(True)
 
         self.load_btn.clicked.connect(self.load_image)
@@ -153,7 +148,6 @@ class CompressionApp(QMainWindow):
             self.load_btn.setEnabled(True)
             self.compress_btn.setEnabled(True)
             self.color_check.setEnabled(True)
-            self.huffman_check.setEnabled(True)
 
     def start_compression_log(self):
         if self.color_check.isChecked():
@@ -190,7 +184,7 @@ class CompressionApp(QMainWindow):
                 compressed = LZW_color.lzw_compress(bit_string)
                 packed = LZW_color.pack_12bit_codes(compressed)
 
-                out_path = os.path.join(self.output_dir_without_Huffman_color, f"ch{ch_idx}_plane{i}.lzw")
+                out_path = os.path.join(self.self.output_dir_color, f"ch{ch_idx}_plane{i}.lzw")
                 with open(out_path, 'wb') as f:
                     f.write(struct.pack('II', *plane.shape))  # height, width
                     f.write(struct.pack('I', len(compressed)))  # кол-во 12-битных кодов
@@ -204,7 +198,7 @@ class CompressionApp(QMainWindow):
             restored_bit_planes = []
 
             for i in range(8):
-                in_path = os.path.join(self.output_dir_without_Huffman_color, f'ch{ch_idx}_plane{i}.lzw')
+                in_path = os.path.join(self.output_dir_color, f'ch{ch_idx}_plane{i}.lzw')
                 with open(in_path, 'rb') as f:
                     height, width = struct.unpack('II', f.read(8))
                     shape = (height, width)
@@ -228,12 +222,12 @@ class CompressionApp(QMainWindow):
 
         # === СОБИРАЕМ ЦВЕТНОЕ ИЗОБРАЖЕНИЕ ===
         restored_color = cv2.merge(restored_channels)
-        cv2.imwrite(os.path.join(self.restored_dir_without_Huffman_color, 'reconstructed_color.tif'), restored_color)
+        cv2.imwrite(os.path.join(self.restored_dir_color, 'reconstructed_color.tif'), restored_color)
 
         original_size = self.image.nbytes
         compressed_size = sum(
-            os.path.getsize(os.path.join(self.output_dir_without_Huffman_color, f))
-            for f in os.listdir(self.output_dir_without_Huffman_color)
+            os.path.getsize(os.path.join(self.output_dir_color, f))
+            for f in os.listdir(self.output_dir_color)
             if f.endswith('.lzw')
         )
         ratio = original_size / compressed_size
@@ -255,7 +249,7 @@ class CompressionApp(QMainWindow):
             compressed = LZW_gray.lzw_compress(bit_string)
             packed = LZW_gray.pack_12bit_codes(compressed)
 
-            out_path = os.path.join(self.output_dir_without_Huffman_gray, f"plane{i}.lzw")
+            out_path = os.path.join(self.output_dir_gray, f"plane{i}.lzw")
             with open(out_path, 'wb') as f:
                 f.write(struct.pack('II', *plane.shape))  # height, width
                 f.write(struct.pack('I', len(compressed)))  # кол-во 12-битных кодов
@@ -268,7 +262,7 @@ class CompressionApp(QMainWindow):
         restored_bit_planes = []
 
         for i in range(8):
-            in_path = os.path.join(self.output_dir_without_Huffman_gray, f"plane{i}.lzw")
+            in_path = os.path.join(self.output_dir_gray, f"plane{i}.lzw")
             with open(in_path, 'rb') as f:
                 height, width = struct.unpack('II', f.read(8))
                 shape = (height, width)
@@ -290,106 +284,13 @@ class CompressionApp(QMainWindow):
         for i in range(8):
             restored_img += (restored_bit_planes[i] << i)
 
-        cv2.imwrite(os.path.join(self.restored_dir_without_Huffman_gray, "reconstructed_gray.tif"), restored_img)
+        cv2.imwrite(os.path.join(self.restored_dir_gray, "reconstructed_gray.tif"), restored_img)
 
         original_size = self.image.nbytes
         compressed_size = sum(
-            os.path.getsize(os.path.join(self.output_dir_without_Huffman_gray, f))
-            for f in os.listdir(self.output_dir_without_Huffman_gray)
+            os.path.getsize(os.path.join(self.output_dir_gray, f))
+            for f in os.listdir(self.output_dir_gray)
             if f.endswith('.lzw')
-        )
-        ratio = original_size / compressed_size
-        end = time()
-
-        self.log_output.append(f'Compression execution time: {(end - start):.6f} sec')
-        self.log_output.append(f'Original image size: {original_size} bytes')
-        self.log_output.append(f'Compressed planes size: {compressed_size} bytes')
-        self.log_output.append(f'Compress ratio: {ratio:.11f}\n\n')
-
-    def compress_color_image_with_huffman(self):
-        img = cv2.imread(self.file_path, cv2.IMREAD_COLOR)
-        start = time()
-        channels = cv2.split(img)
-        restored_channels = []
-
-        total_original_bits = 0
-        total_compressed_bits = 0
-
-        for ch_idx, channel in enumerate(channels):
-            bit_planes = []
-            bit_plane_strings = []
-            for i in range(8):
-                plane = ((channel >> i) & 1).astype(np.uint8)
-                bit_planes.append(plane)
-                flat = plane.flatten()
-                bit_string = ''.join(str(b) for b in flat)
-                bit_plane_strings.append(bit_string)
-
-            restored_bit_planes = []
-            channel_original_bits = 0
-            channel_compressed_bits = 0
-
-            for i in range(8):
-                shape = bit_planes[i].shape
-                bit_string = bit_plane_strings[i]
-                original_bits = len(bit_string)
-
-                flat = bit_planes[i].flatten()
-                if np.all(flat == 0):
-                    compressed_bits = 0
-                    channel_compressed_bits += compressed_bits
-
-                    # Создаем нулевую плоскость и добавляем
-                    restored_plane = np.zeros(shape, dtype=np.uint8)
-                    restored_bit_planes.append(restored_plane)
-                    continue
-
-                # Сжимаем LZW
-                compressed = LZW_Huffman.lzw_compress(bit_string)
-
-                # Кодируем адаптивным Хаффманом
-                coder = LZW_Huffman.AdaptiveHuffmanCoder()
-                encoded_bits = coder.encode(compressed)
-                compressed_bits = len(encoded_bits)
-
-                encoded_bytes = LZW_Huffman.bits_to_bytes(encoded_bits)
-                # compressed_bytes_len = len(encoded_bytes)
-
-                channel_original_bits += original_bits
-                channel_compressed_bits += compressed_bits
-
-                out_path = os.path.join(self.output_dir_with_Huffman_color, f"ch{ch_idx}_plane{i}.bin")
-                with open(out_path, 'wb') as f:
-                    f.write(struct.pack('I', len(encoded_bits)))
-                    f.write(encoded_bytes)
-
-                with open(out_path, 'rb') as f:
-                    bit_len, = struct.unpack('I', f.read(4))
-                    encoded_data = f.read()
-                encoded_bits_read = LZW_Huffman.bytes_to_bits(encoded_data, bit_len)
-
-                decoder = LZW_Huffman.AdaptiveHuffmanCoder()
-                decoded = decoder.decode(encoded_bits_read)
-
-                decompressed = LZW_Huffman.lzw_decompress(decoded)
-                restored_plane = LZW_Huffman.bit_string_to_image(decompressed, shape)
-                restored_bit_planes.append(restored_plane)
-
-            total_original_bits += channel_original_bits
-            total_compressed_bits += channel_compressed_bits
-
-            # Восстанавливаем канал из битовых плоскостей
-            restored_channel = sum((restored_bit_planes[i] << i).astype(np.uint8) for i in range(8))
-            restored_channels.append(restored_channel)
-
-        restored_img = cv2.merge(restored_channels)
-        cv2.imwrite(os.path.join(self.restored_dir_with_Huffman_color, 'restored_image.tif'), restored_img)
-
-        original_size = img.nbytes
-        compressed_size = sum(
-            os.path.getsize(os.path.join(self.output_dir_with_Huffman_color, f))
-            for f in os.listdir(self.output_dir_with_Huffman_color)
-            if f.endswith('.bin')
         )
         ratio = original_size / compressed_size
         end = time()
